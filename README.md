@@ -186,6 +186,19 @@ To start a cluster in this mode, simply add `SuspendTime=-1` to the additional s
 
 To switch a cluster to this mode, add `SuspendTime=-1` to the slurm.conf and run `scontrol reconfigure`. Then run `azslurm remove_nodes && azslurm scale`.
 
+### External (non-CycleCloud) nodes
+Static Slurm nodes that CycleCloud did not create - for example on-premises GPU servers reached over ExpressRoute or VPN - can join the cluster's partitions. Without help, azslurmd marks any running node it cannot find in CycleCloud `down` with `Reason=cyclecloud_no_node` and resets its `NodeAddr`.
+
+Give those nodes the `external` feature and azslurmd leaves them alone. Define them in `/etc/slurm/site_specific.conf`, which is preserved across upgrades, and keep their partition out of power saving so Slurm never asks CycleCloud to start or stop them:
+
+```
+NodeName=onprem-[1-4] Features=external NodeAddr=... CPUs=... RealMemory=... Gres=gpu:8 State=UNKNOWN
+PartitionName=onprem Nodes=onprem-[1-4] State=UP
+SuspendExcParts=onprem
+```
+
+The nodes need the cluster's Slurm version, munge key, UID/GID mapping and `/sched` / `/shared` mounts, and must reach the scheduler on TCP 6817 (and the scheduler them on 6818).
+
 ### Slurm Job Accounting
 
 Accounting feature in slurm is described in detail here: [Accounting](https://slurm.schedmd.com/accounting.html)

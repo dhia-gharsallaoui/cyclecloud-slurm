@@ -142,6 +142,12 @@ class SuspendExcNodesSerializer:
         return self.last_suspend_exc_nodes[1]
 
 
+# Slurm nodes carrying this feature were not created by CycleCloud (e.g.
+# on-premises servers reached over ExpressRoute or VPN). azslurmd leaves them
+# alone instead of marking them down as missing from CycleCloud.
+EXTERNAL_NODE_FEATURE = "external"
+
+
 class SlurmNodes:
     def __init__(self, suspend_exc_nodes_slzr: SuspendExcNodesSerializer) -> None:
         self.__nodes: Dict[str, Dict] = []
@@ -185,6 +191,12 @@ class SlurmNodes:
     def has_zombie_reason(self, name: str) -> bool:
         return self.__nodes[name].get("Reason") in ["cyclecloud_zombie_node"]
     
+    def is_external(self, name: str) -> bool:
+        """True for a static node CycleCloud does not own (see EXTERNAL_NODE_FEATURE)."""
+        node = self.__nodes[name]
+        features = node.get("AvailableFeatures") or node.get("Features") or ""
+        return EXTERNAL_NODE_FEATURE in [f.strip() for f in str(features).split(",")]
+
     def is_joined(self, name: str) -> bool:
         return not bool(self.states(name).intersection(set(["powered_down", "powering_down", "powering_up"])))
 
@@ -315,6 +327,9 @@ class SyncNodes:
                     logging.info("Unsetting old reason for node=%s", name)
                     slurm_nodes.unset_reason(name)
                     continue
+            if slurm_nodes.is_external(name):
+                continue
+
             node = cc_nodes.get(name)
 
             if not node:
